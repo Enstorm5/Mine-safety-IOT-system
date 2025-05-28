@@ -41,6 +41,14 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
 
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  Serial.print("Connecting to Wi-Fi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(300);
+  }
+  Serial.println("\nConnected to Wi-Fi!");
+
   dht.begin();
   Serial.println("DHT22 Initialized");
 
