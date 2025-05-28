@@ -4,6 +4,18 @@
 #include <Adafruit_BMP280.h>
 #include <SoftwareSerial.h>
 #include <TinyGPSPlus.h>
+#include <ESP8266WiFi.h>
+#include <Firebase_ESP_Client.h>
+
+
+#define WIFI_SSID "bruh"
+#define WIFI_PASSWORD "password"
+#define API_KEY "api key"
+#define DATABASE_URL "database url"
+
+FirebaseData fbdo;
+FirebaseAuth auth;
+FirebaseConfig config;
 
 #define DHTPIN 2          // GPIO2 = D4 on NodeMCU
 #define DHTTYPE DHT22
