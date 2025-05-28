@@ -17,9 +17,13 @@ DHT dht(DHTPIN, DHTTYPE);
 Adafruit_BMP280 bmp; // I2C
 const float correctPressure = 1004.3; // hPa, known correct value
 
+#define MQ9_AO_PIN A0 //MQ-9 Gas sensor setup
+
 unsigned long lastSensorRead = 0;
 const unsigned long sensorInterval = 2000;
 float pressureErrorPercent = 0;
+
+#define MQ9_AO_PIN A0 //MQ-9 Gas sensor setup
 
 void setup() {
   Serial.begin(115200);
@@ -82,6 +86,10 @@ void loop() {
   Serial.print("Corrected Pressure: ");
   Serial.print(correctedPressure);
   Serial.println(" hPa");
+
+  init analogVal = analogRead(MQ9_AO_PIN); // MQ-9  (Analog only)
+  Serial.print("MQ-9 Gas Sensor (Analog CH4/LPG): ");
+  Serial.println(analogVal);
 
   Serial.println("----------------------");
 
