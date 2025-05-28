@@ -48,6 +48,27 @@ void setup() {
     delay(300);
   }
   Serial.println("\nConnected to Wi-Fi!");
+  
+  // Firebase setup
+  config.api_key = API_KEY;
+  config.database_url = DATABASE_URL;
+  config.cert.file = "";
+  auth.user.email = " ";
+  auth.user.password = " ";
+
+  Firebase.begin(&config, &auth);
+  Firebase.reconnectWiFi(true);
+
+  Serial.println("Authenticating with Firebase...");
+  unsigned long startTime = millis();
+  while (!Firebase.ready()) {
+    delay(100);
+    if (millis() - startTime > 15000) {
+      Serial.println("Firebase auth timeout!");
+      return;
+    }
+  }
+  Serial.println("Firebase ready!");
 
   dht.begin();
   Serial.println("DHT22 Initialized");
@@ -116,3 +137,4 @@ void loop() {
   delay(2000);
 }
 }
+
