@@ -128,7 +128,7 @@ void loop() {
   Serial.print(correctedPressure);
   Serial.println(" hPa");
 
-  init analogVal = analogRead(MQ9_AO_PIN); // MQ-9  (Analog only)
+  int analogVal = analogRead(MQ9_AO_PIN); // MQ-9  (Analog only)
   Serial.print("MQ-9 Gas Sensor (Analog CH4/LPG): ");
   Serial.println(analogVal);
 
