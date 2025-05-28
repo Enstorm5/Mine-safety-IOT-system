@@ -19,23 +19,22 @@ FirebaseConfig config;
 
 #define DHTPIN 2          // GPIO2 = D4 on NodeMCU
 #define DHTTYPE DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
 #define SW420_PIN 14      // GPIO14 = D5 on NodeMCU
 
+Adafruit_BMP280 bmp;
+const float knownCorrectPressure = 1004.3;
+float pressureErrorPercent = 0.0;
+
 #define GPS_RX_PIN D6
-SoftwareSerial gpsSerial(GPS_RX_PIN, -1); // RX-only
+SoftwareSerial gpsSerial(GPS_RX_PIN, -1);// RX-only
 TinyGPSPlus gps;
 
-DHT dht(DHTPIN, DHTTYPE);
-Adafruit_BMP280 bmp; // I2C
-const float correctPressure = 1004.3; // hPa, known correct value
-
-#define MQ9_AO_PIN A0 //MQ-9 Gas sensor setup
+#define MQ9_AO_PIN A0//MQ-9 Gas sensor setup
 
 unsigned long lastSensorRead = 0;
 const unsigned long sensorInterval = 2000;
-float pressureErrorPercent = 0;
-
-#define MQ9_AO_PIN A0 //MQ-9 Gas sensor setup
 
 void setup() {
   Serial.begin(115200);
@@ -48,13 +47,12 @@ void setup() {
     delay(300);
   }
   Serial.println("\nConnected to Wi-Fi!");
-  
-  // Firebase setup
+
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
   config.cert.file = "";
-  auth.user.email = " ";
-  auth.user.password = " ";
+  auth.user.email = "";
+  auth.user.password = "";
 
   Firebase.begin(&config, &auth);
   Firebase.reconnectWiFi(true);
@@ -64,100 +62,116 @@ void setup() {
   while (!Firebase.ready()) {
     delay(100);
     if (millis() - startTime > 15000) {
-      Serial.println("Firebase auth timeout!");
+      Serial.println(" Firebase auth timeout!");
       return;
     }
   }
-  Serial.println("Firebase ready!");
+  Serial.println(" Firebase ready!");
 
   dht.begin();
-  Serial.println("DHT22 Initialized");
-
   pinMode(SW420_PIN, INPUT);
-  Serial.println("Vibration Sensor Initialized");
 
   if (!bmp.begin(0x76)) {
-    Serial.println("Could not find BMP280 sensor!");
-    while (1);
+    if (!bmp.begin(0x77)) {
+      Serial.println("Could not find BMP280 sensor!");
+      while (1);
+    }
   }
-  Serial.println("BMP280 sensor initialized.");
 
   float initialPressure = bmp.readPressure() / 100.0;
-  pressureErrorPercent = (correctPressure - initialPressure) / initialPressure * 100.0;
+  pressureErrorPercent = (knownCorrectPressure - initialPressure) / initialPressure * 100.0;
 
   gpsSerial.begin(9600);
-  Serial.println("GPS Active");
+  Serial.println("All sensors initialized.");
 }
 
 void loop() {
-
   while (gpsSerial.available()) {
-    char c = gpsSerial.read();
-    gps.encode(c); 
+    gps.encode(gpsSerial.read());
   }
 
-  
-  if (gps.location.isUpdated()) {
-    Serial.print(" Latitude: ");
-    Serial.println(gps.location.lat(), 6);
-    Serial.print(" Longitude: ");
-    Serial.println(gps.location.lng(), 6);
-    
-  float humidity = dht.readHumidity();
-  float temperature = dht.readTemperature();
+  if (millis() - lastSensorRead >= sensorInterval) {
+    lastSensorRead = millis();
 
-  if (isnan(humidity) || isnan(temperature)) {
-    Serial.println("Sensor read failed!");
-  } else {
-    Serial.print("🌡 Temp: ");
-    Serial.print(temperature);
-    Serial.print(" °C | Humidity: ");
-    Serial.print(humidity);
-    Serial.println(" %");
-  }
+    float humidity = dht.readHumidity();
+    float temperature = dht.readTemperature();
+    int vibration = digitalRead(SW420_PIN);
+    float measuredPressure = bmp.readPressure() / 100.0;
+    float correctedPressure = measuredPressure + (measuredPressure * pressureErrorPercent / 100.0);
+    int gasAnalog = analogRead(MQ9_AO_PIN);
 
-  int vibration = digitalRead(SW420_PIN);
-  Serial.print("SW-420: ");
-  Serial.println(vibration == LOW ? "Vibration not Detected!" : "Vibration");
+    double lat = gps.location.isValid() ? gps.location.lat() : 0.0;
+    double lng = gps.location.isValid() ? gps.location.lng() : 0.0;
+    double alt = gps.altitude.isValid() ? gps.altitude.meters() : 0.0;
 
-  float measuredPressure = bmp.readPressure() / 100.0; // hPa
-  float errorPercent = (correctPressure - measuredPressure) / measuredPressure * 100.0;
-  float correctedPressure = measuredPressure + (measuredPressure * errorPercent / 100.0);
+    if (!isnan(temperature)) {
+      if (Firebase.RTDB.setFloat(&fbdo, "/sensors/temperature", temperature)) {
+        Serial.print(" Temp sent: ");
+        Serial.println(temperature);
+      } else {
+        Serial.print(" Temp send failed: ");
+        Serial.println(fbdo.errorReason());
+      }
+    }
 
-  Serial.print("Corrected Pressure: ");
-  Serial.print(correctedPressure);
-  Serial.println(" hPa");
+    if (!isnan(humidity)) {
+      if (Firebase.RTDB.setFloat(&fbdo, "/sensors/humidity", humidity)) {
+        Serial.print(" Humidity sent: ");
+        Serial.println(humidity);
+      } else {
+        Serial.print("Humidity send failed: ");
+        Serial.println(fbdo.errorReason());
+      }
+    }
 
-  int analogVal = analogRead(MQ9_AO_PIN); // MQ-9  (Analog only)
-  Serial.print("MQ-9 Gas Sensor (Analog CH4/LPG): ");
-  Serial.println(analogVal);
- 
-  if (!isnan(temperature)) { // send Temperature values to the Firebase 
-    if (Firebase.RTDB.setFloat(&fbdo, "/sensors/temperature", temperature))
-      Serial.print("Temp sent: ");
-      Serial.println(temperature);
+    if (Firebase.RTDB.setInt(&fbdo, "/sensors/vibration", vibration == HIGH ? 1 : 0)) {
+      Serial.print(" Vibration sent: ");
+      Serial.println(vibration == HIGH ? "Detected" : "Not detected");
     } else {
-      Serial.print("Temp send failed: ");
+      Serial.print(" Vibration send failed: ");
       Serial.println(fbdo.errorReason());
     }
-  }
 
-  if (!isnan(humidity)) { // send Humidity values to the Firebase
-    if (Firebase.RTDB.setFloat(&fbdo, "/sensors/humidity", humidity)) {
-      Serial.print("Humidity sent: ");
-      Serial.println(humidity);
+    if (Firebase.RTDB.setFloat(&fbdo, "/sensors/pressure", correctedPressure)) {
+      Serial.print(" Pressure sent: ");
+      Serial.println(correctedPressure);
     } else {
-      Serial.print("Humidity send failed: ");
+      Serial.print(" Pressure send failed: ");
       Serial.println(fbdo.errorReason());
     }
+
+    if (Firebase.RTDB.setInt(&fbdo, "/sensors/gas_analog", gasAnalog)) {
+      Serial.print(" Gas analog sent: ");
+      Serial.println(gasAnalog);
+    } else {
+      Serial.print(" Gas analog send failed: ");
+      Serial.println(fbdo.errorReason());
+    }
+
+    if (Firebase.RTDB.setDouble(&fbdo, "/sensors/gps/latitude", lat)) {
+      Serial.print(" GPS Latitude sent: ");
+      Serial.println(lat, 6);
+    } else {
+      Serial.print(" GPS Latitude send failed: ");
+      Serial.println(fbdo.errorReason());
+    }
+
+    if (Firebase.RTDB.setDouble(&fbdo, "/sensors/gps/longitude", lng)) {
+      Serial.print(" GPS Longitude sent: ");
+      Serial.println(lng, 6);
+    } else {
+      Serial.print(" GPS Longitude send failed: ");
+      Serial.println(fbdo.errorReason());
+    }
+
+    if (Firebase.RTDB.setDouble(&fbdo, "/sensors/gps/altitude", alt)) {
+      Serial.print(" GPS Altitude sent: ");
+      Serial.println(alt);
+    } else {
+      Serial.print(" GPS Altitude send failed: ");
+      Serial.println(fbdo.errorReason());
+    }
+
+    Serial.println("------------------------");
   }
-
-
-  }
-
-  Serial.println("----------------------");
-
-  delay(2000);
 }
-}
-
