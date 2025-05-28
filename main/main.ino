@@ -131,6 +131,29 @@ void loop() {
   int analogVal = analogRead(MQ9_AO_PIN); // MQ-9  (Analog only)
   Serial.print("MQ-9 Gas Sensor (Analog CH4/LPG): ");
   Serial.println(analogVal);
+ 
+  if (!isnan(temperature)) { // send Temperature values to the Firebase 
+    if (Firebase.RTDB.setFloat(&fbdo, "/sensors/temperature", temperature))
+      Serial.print("Temp sent: ");
+      Serial.println(temperature);
+    } else {
+      Serial.print("Temp send failed: ");
+      Serial.println(fbdo.errorReason());
+    }
+  }
+
+  if (!isnan(humidity)) { // send Humidity values to the Firebase
+    if (Firebase.RTDB.setFloat(&fbdo, "/sensors/humidity", humidity)) {
+      Serial.print("Humidity sent: ");
+      Serial.println(humidity);
+    } else {
+      Serial.print("Humidity send failed: ");
+      Serial.println(fbdo.errorReason());
+    }
+  }
+
+
+  }
 
   Serial.println("----------------------");
 
