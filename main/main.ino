@@ -50,7 +50,6 @@ void setup() {
 
   config.api_key = API_KEY;
   config.database_url = DATABASE_URL;
-  config.cert.file = "";
   auth.user.email = "";
   auth.user.password = "";
 
